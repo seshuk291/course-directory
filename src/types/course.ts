@@ -4,7 +4,8 @@ export interface Chapter {
   filename: string;
   originalPath?: string; // The actual file path on disk
   type: 'html' | 'video'; // File type to determine how to render
-  folderId?: number; // Reference to folder hierarchy
+  folderId?: number; // Reference to folder hierarchy (also support folder_id from database)
+  folder_id?: number; // Database field name
 }
 
 export interface CourseFolder {

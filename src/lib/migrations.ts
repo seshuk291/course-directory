@@ -132,13 +132,8 @@ export async function runMigrations(): Promise<void> {
                             reject(err);
                           } else {
                             console.log('Migration completed: add_category_support');
-                            db.close((closeErr) => {
-                              if (closeErr) {
-                                reject(closeErr);
-                              } else {
-                                resolve();
-                              }
-                            });
+                            // Run additional migration for chapters table
+                            runChaptersTableMigration(db, resolve, reject);
                           }
                         }
                       );
@@ -148,17 +143,70 @@ export async function runMigrations(): Promise<void> {
               );
             } else {
               console.log('Migration already applied: add_category_support');
-              db.close((closeErr) => {
-                if (closeErr) {
-                  reject(closeErr);
-                } else {
-                  resolve();
-                }
-              });
+              // Still run chapters table migration in case it's missing
+              runChaptersTableMigration(db, resolve, reject);
             }
           }
         );
       });
     });
   });
+}
+
+function runChaptersTableMigration(db: sqlite3.Database, resolve: () => void, reject: (error: Error) => void) {
+  // Check if chapters table exists
+  db.get(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='chapters'",
+    (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      if (!row) {
+        console.log('Creating missing chapters table...');
+        // Create chapters table
+        db.run(`
+          CREATE TABLE IF NOT EXISTS chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            directory_id INTEGER,
+            folder_id INTEGER,
+            name TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            path TEXT NOT NULL,
+            original_path TEXT,
+            type TEXT DEFAULT 'html',
+            sort_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
+            FOREIGN KEY (folder_id) REFERENCES folder_hierarchy (id) ON DELETE SET NULL
+          )
+        `, (err) => {
+          if (err) {
+            console.error('Error creating chapters table:', err);
+            reject(err);
+          } else {
+            console.log('Chapters table created successfully');
+            db.close((closeErr) => {
+              if (closeErr) {
+                reject(closeErr);
+              } else {
+                resolve();
+              }
+            });
+          }
+        });
+      } else {
+        console.log('Chapters table already exists');
+        db.close((closeErr) => {
+          if (closeErr) {
+            reject(closeErr);
+          } else {
+            resolve();
+          }
+        });
+      }
+    }
+  );
 }

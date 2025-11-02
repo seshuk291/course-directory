@@ -505,7 +505,18 @@ export async function getDirectoryFolders(directoryId: number): Promise<any[]> {
         if (err) {
           reject(err);
         } else {
-          resolve(rows || []);
+          // Transform database rows to match frontend interface
+          const transformedRows = (rows || []).map((row: any) => ({
+            ...row,
+            name: row.folder_name,
+            displayName: row.display_name,
+            path: row.folder_path,
+            parentId: row.parent_id,
+            children: [],
+            chapters: [],
+            sortOrder: row.sort_order
+          }));
+          resolve(transformedRows);
         }
       }
     );

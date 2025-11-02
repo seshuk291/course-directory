@@ -55,8 +55,64 @@ export default function SubdirectoryManager({
       const response = await fetch(`/api/directories/${directoryId}/structure`);
       if (response.ok) {
         const data = await response.json();
-        setFolders(data.folders.map((f: CourseFolder) => ({ ...f, expanded: false })));
-        setChapters(data.chapters);
+        console.log('Fetched structure data:', data); // Debug log
+        
+        // Transform folders to include expanded state and build hierarchy
+        const folderMap = new Map<number, FolderNode>();
+        
+        // First pass: create all folders with proper naming
+        data.folders.forEach((f: any) => {
+          const folder: FolderNode = {
+            ...f,
+            id: f.id,
+            name: f.name || f.folder_name,
+            displayName: f.displayName || f.display_name,
+            path: f.path || f.folder_path,
+            level: f.level || 0,
+            parentId: f.parentId || f.parent_id,
+            expanded: false,
+            children: [],
+            chapters: [],
+            sortOrder: f.sortOrder || f.sort_order || 0
+          };
+          folderMap.set(folder.id, folder);
+        });
+        
+        // Second pass: build hierarchy
+        const rootFolders: FolderNode[] = [];
+        folderMap.forEach((folder) => {
+          if (folder.parentId) {
+            const parent = folderMap.get(folder.parentId);
+            if (parent) {
+              parent.children.push(folder);
+            }
+          } else {
+            rootFolders.push(folder);
+          }
+        });
+        
+        // Sort folders by sortOrder and name
+        const sortFolders = (folders: FolderNode[]) => {
+          folders.sort((a, b) => {
+            if (a.sortOrder !== b.sortOrder) {
+              return a.sortOrder - b.sortOrder;
+            }
+            return (a.displayName || a.name).localeCompare(b.displayName || b.name);
+          });
+          folders.forEach(folder => sortFolders(folder.children));
+        };
+        
+        sortFolders(rootFolders);
+        
+        console.log('Processed folders:', rootFolders); // Debug log
+        setFolders(rootFolders);
+        
+        // Normalize chapter data to use consistent field names
+        const normalizedChapters = (data.chapters || []).map((chapter: any) => ({
+          ...chapter,
+          folderId: chapter.folder_id || chapter.folderId
+        }));
+        setChapters(normalizedChapters);
       }
     } catch (error) {
       console.error('Error fetching course structure:', error);
@@ -68,20 +124,32 @@ export default function SubdirectoryManager({
 
     setLoading(true);
     try {
+      const displayName = newFolderDisplayName.trim() || newFolderName.trim();
+      console.log('Creating folder:', { 
+        name: newFolderName.trim(), 
+        displayName, 
+        parentId: selectedFolderId 
+      }); // Debug log
+      
       const response = await fetch(`/api/directories/${directoryId}/folders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: newFolderName.trim(),
-          displayName: newFolderDisplayName.trim() || newFolderName.trim(),
+          displayName: displayName,
           parentId: selectedFolderId
         })
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log('Folder created:', result); // Debug log
         await fetchCourseStructure();
         onStructureUpdate();
         resetFolderForm();
+      } else {
+        const error = await response.json();
+        console.error('Failed to create folder:', error);
       }
     } catch (error) {
       console.error('Error creating folder:', error);
@@ -174,11 +242,19 @@ export default function SubdirectoryManager({
   };
 
   const toggleFolder = (folderId: number) => {
-    setFolders(prev => prev.map(folder => 
-      folder.id === folderId 
-        ? { ...folder, expanded: !folder.expanded }
-        : folder
-    ));
+    const updateFolderExpansion = (folderList: FolderNode[]): FolderNode[] => {
+      return folderList.map(folder => {
+        if (folder.id === folderId) {
+          return { ...folder, expanded: !folder.expanded };
+        }
+        return {
+          ...folder,
+          children: updateFolderExpansion(folder.children)
+        };
+      });
+    };
+    
+    setFolders(prev => updateFolderExpansion(prev));
   };
 
   const resetFolderForm = () => {
@@ -186,6 +262,18 @@ export default function SubdirectoryManager({
     setNewFolderDisplayName('');
     setIsCreatingFolder(false);
     setSelectedFolderId(null);
+  };
+
+  const getAllFolders = (): FolderNode[] => {
+    const allFolders: FolderNode[] = [];
+    
+    const collectFolders = (folder: FolderNode) => {
+      allFolders.push(folder);
+      folder.children.forEach(collectFolders);
+    };
+    
+    folders.forEach(collectFolders);
+    return allFolders;
   };
 
   const renderFolder = (folder: FolderNode, level: number = 0) => (
@@ -217,7 +305,7 @@ export default function SubdirectoryManager({
           {editingFolderId === folder.id ? (
             <input
               type="text"
-              defaultValue={folder.displayName || folder.name}
+              defaultValue={folder.displayName || folder.name || ''}
               onBlur={(e) => updateFolder(folder.id, { displayName: e.target.value })}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -234,7 +322,7 @@ export default function SubdirectoryManager({
               className="font-medium text-gray-900 cursor-pointer"
               onClick={() => setSelectedFolderId(selectedFolderId === folder.id ? null : folder.id)}
             >
-              {folder.displayName || folder.name}
+              {folder.displayName || folder.name || 'Unnamed Folder'}
             </span>
           )}
         </div>
@@ -291,9 +379,9 @@ export default function SubdirectoryManager({
                   className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-900"
                 >
                   <option value="">Root</option>
-                  {folders.map(f => (
+                  {getAllFolders().map((f: FolderNode) => (
                     <option key={f.id} value={f.id}>
-                      {f.displayName || f.name}
+                      {f.displayName || f.name || `Folder ${f.id}`}
                     </option>
                   ))}
                 </select>
@@ -334,7 +422,7 @@ export default function SubdirectoryManager({
           {isCreatingFolder && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h3 className="text-lg font-medium text-gray-900 mb-3">
-                Create New Folder {selectedFolderId && `in ${folders.find(f => f.id === selectedFolderId)?.displayName}`}
+                Create New Folder {selectedFolderId && `in ${getAllFolders().find(f => f.id === selectedFolderId)?.displayName || getAllFolders().find(f => f.id === selectedFolderId)?.name || 'Selected Folder'}`}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -392,7 +480,7 @@ export default function SubdirectoryManager({
               </button>
               {selectedFolderId && (
                 <p className="text-sm text-gray-600 mt-2">
-                  New folder will be created inside: {folders.find(f => f.id === selectedFolderId)?.displayName}
+                  New folder will be created inside: {getAllFolders().find(f => f.id === selectedFolderId)?.displayName || getAllFolders().find(f => f.id === selectedFolderId)?.name || 'Selected Folder'}
                 </p>
               )}
             </div>
@@ -423,9 +511,9 @@ export default function SubdirectoryManager({
                         className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-900"
                       >
                         <option value="">Root</option>
-                        {folders.map(f => (
+                        {getAllFolders().map((f: FolderNode) => (
                           <option key={f.id} value={f.id}>
-                            {f.displayName || f.name}
+                            {f.displayName || f.name || `Folder ${f.id}`}
                           </option>
                         ))}
                       </select>

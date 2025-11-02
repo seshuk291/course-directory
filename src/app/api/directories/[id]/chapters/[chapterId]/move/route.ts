@@ -18,14 +18,19 @@ export async function PUT(
 
     const db = await initDatabase();
 
-    // Update chapter's folder assignment
+    // Update chapter's folder assignment using path as identifier
     await new Promise<void>((resolve, reject) => {
       db.run(
-        'UPDATE chapters SET folder_id = ? WHERE path = ? AND directory_id = ?',
+        'UPDATE chapters SET folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ? AND directory_id = ?',
         [folderId || null, decodedChapterId, directoryId],
         function(err) {
-          if (err) reject(err);
-          else resolve();
+          if (err) {
+            console.error('Error updating chapter:', err);
+            reject(err);
+          } else {
+            console.log(`Updated chapter: ${decodedChapterId}, affected rows: ${this.changes}`);
+            resolve();
+          }
         }
       );
     });
