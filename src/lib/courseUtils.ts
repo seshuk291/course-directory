@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { Course, Chapter, CourseStructure, CourseFolder, CourseCategory } from '@/types/course';
-import { DirectoryManager } from './database';
+import { Course, Chapter, CourseFolder, CourseStructure, CourseCategory } from '@/types/course';
+import { DirectoryManager, getDirectoryFolders, initDatabase } from './database';
 
 const directoryManager = new DirectoryManager();
 
@@ -99,14 +99,86 @@ export async function getCourseStructure(): Promise<CourseStructure> {
     
     for (const selectedDir of selectedDirectories) {
       if (fs.existsSync(selectedDir.original_path)) {
-        const { chapters, folders } = getChaptersAndFoldersFromDirectory(selectedDir.original_path, selectedDir.id);
+        // For selected directories, get folder structure from database instead of file system
+        const dbFolders = await getDirectoryFolders(selectedDir.id);
+        
+        // Get chapters from database
+        const db = await initDatabase();
+        const dbChapters = await new Promise<any[]>((resolve, reject) => {
+          db.all(
+            'SELECT * FROM chapters WHERE directory_id = ? ORDER BY sort_order, name',
+            [selectedDir.id],
+            (err: any, rows: any) => {
+              if (err) reject(err);
+              else resolve(rows || []);
+            }
+          );
+        });
+        db.close();
+        
+        // If no chapters in database, scan directory and populate
+        let chapters = dbChapters;
+        if (chapters.length === 0) {
+          const { chapters: scannedChapters } = getChaptersAndFoldersFromDirectory(selectedDir.original_path, selectedDir.id);
+          chapters = scannedChapters;
+        }
+        
+        // Transform database folders to match frontend interface and build hierarchy
+        const folderMap = new Map<number, CourseFolder>();
+        dbFolders.forEach((f: any) => {
+          folderMap.set(f.id, {
+            id: f.id,
+            name: f.name || f.folder_name,
+            displayName: f.displayName || f.display_name,
+            path: f.path || f.folder_path,
+            level: f.level || 0,
+            parentId: f.parentId || f.parent_id,
+            children: [],
+            chapters: [],
+            sortOrder: f.sortOrder || f.sort_order || 0
+          });
+        });
+        
+        // Build folder hierarchy
+        const rootFolders: CourseFolder[] = [];
+        folderMap.forEach((folder) => {
+          if (folder.parentId) {
+            const parent = folderMap.get(folder.parentId);
+            if (parent) {
+              parent.children.push(folder);
+            }
+          } else {
+            rootFolders.push(folder);
+          }
+        });
+        
+        // Assign chapters to folders
+        chapters.forEach((chapter: any) => {
+          const normalizedChapter = {
+            ...chapter,
+            name: chapter.name,
+            filename: chapter.filename,
+            path: chapter.path,
+            type: chapter.type || 'html',
+            folderId: chapter.folder_id || chapter.folderId
+          };
+          
+          if (normalizedChapter.folderId) {
+            const folder = folderMap.get(normalizedChapter.folderId);
+            if (folder) {
+              folder.chapters.push(normalizedChapter);
+            }
+          }
+        });
+        
+        // Get custom names and apply them
         const customNames = await directoryManager.getCustomNames(selectedDir.id);
         
         courses.push({
           name: selectedDir.display_name,
           path: selectedDir.original_path,
-          chapters: await applyCustomNames(chapters, customNames),
-          folders: await applyCustomNamesToFolders(folders, customNames),
+          chapters: await applyCustomNames(chapters.filter((c: any) => !c.folderId && !c.folder_id), customNames),
+          folders: await applyCustomNamesToFolders(rootFolders, customNames),
           originalPath: selectedDir.original_path,
           directoryId: selectedDir.id,
           categoryId: selectedDir.category_id,
