@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Functions and Scope</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            color: #2c3e50;
+            background-color: #ecf0f1;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { 
+            color: #e74c3c; 
+            border-bottom: 3px solid #e74c3c;
+            padding-bottom: 10px;
+        }
+        h2 { 
+            color: #3498db; 
+            margin-top: 30px;
+        }
+        .info-box {
+            background-color: #d5f4e6;
+            border: 1px solid #27ae60;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .warning-box {
+            background-color: #ffeaa7;
+            border: 1px solid #fdcb6e;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        code {
+            background-color: #f8f9fa;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Functions and Scope</h1>
+        
+        <h2>What are Functions?</h2>
+        <p>Functions are reusable blocks of code that perform specific tasks. They help organize code and avoid repetition.</p>
+        
+        <div class="info-box">
+            <strong>💡 Pro Tip:</strong> Functions should do one thing and do it well. This makes your code easier to understand and maintain.
+        </div>
+        
+        <h2>Function Types</h2>
+        <ul>
+            <li><strong>Function Declarations:</strong> <code>function myFunction() {}</code></li>
+            <li><strong>Function Expressions:</strong> <code>const myFunction = function() {}</code></li>
+            <li><strong>Arrow Functions:</strong> <code>const myFunction = () => {}</code></li>
+        </ul>
+        
+        <h2>Understanding Scope</h2>
+        <p>Scope determines where variables can be accessed in your code:</p>
+        <ul>
+            <li><strong>Global Scope:</strong> Variables accessible everywhere</li>
+            <li><strong>Function Scope:</strong> Variables accessible only within the function</li>
+            <li><strong>Block Scope:</strong> Variables accessible only within the block (let/const)</li>
+        </ul>
+        
+        <div class="warning-box">
+            <strong>⚠️ Warning:</strong> Avoid creating too many global variables as they can lead to naming conflicts and unexpected behavior.
+        </div>
+        
+        <h2>Best Practices</h2>
+        <ol>
+            <li>Use descriptive function names</li>
+            <li>Keep functions small and focused</li>
+            <li>Use parameters instead of global variables</li>
+            <li>Return values explicitly</li>
+        </ol>
+    </div>
+</body>
+</html>
