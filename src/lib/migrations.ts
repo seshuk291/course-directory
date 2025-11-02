@@ -35,122 +35,119 @@ export async function runMigrations(): Promise<void> {
 
             if (!row) {
               console.log('Running migration: add_category_support');
-              
-              // Create tables first if they don't exist
-              db.run(`
-                CREATE TABLE IF NOT EXISTS selected_directories (
-                  id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  original_path TEXT NOT NULL UNIQUE,
-                  display_name TEXT NOT NULL,
-                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-              `);
-
-              // Create categories table
-              db.run(`
-                CREATE TABLE IF NOT EXISTS course_categories (
-                  id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT NOT NULL UNIQUE,
-                  description TEXT,
-                  color TEXT DEFAULT '#3b82f6',
-                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-              `);
-
-              // Check if category_id column exists before adding it
-              db.get(
-                "PRAGMA table_info(selected_directories)",
-                (err, info: any) => {
-                  if (err) {
-                    reject(err);
-                    return;
-                  }
-
-                  // Check if category_id column exists
-                  db.all(
-                    "PRAGMA table_info(selected_directories)",
-                    (err, columns: any[]) => {
-                      if (err) {
-                        reject(err);
-                        return;
-                      }
-
-                      const hasCategoryId = columns.some(col => col.name === 'category_id');
-                      
-                      if (!hasCategoryId) {
-                        // Add category_id column to selected_directories
-                        db.run(`
-                          ALTER TABLE selected_directories 
-                          ADD COLUMN category_id INTEGER REFERENCES course_categories(id)
-                        `);
-                      }
-
-                      // Create folder_hierarchy table
-                      db.run(`
-                        CREATE TABLE IF NOT EXISTS folder_hierarchy (
-                          id INTEGER PRIMARY KEY AUTOINCREMENT,
-                          directory_id INTEGER,
-                          parent_id INTEGER,
-                          folder_name TEXT NOT NULL,
-                          display_name TEXT,
-                          folder_path TEXT NOT NULL,
-                          level INTEGER DEFAULT 0,
-                          sort_order INTEGER DEFAULT 0,
-                          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                          FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
-                          FOREIGN KEY (parent_id) REFERENCES folder_hierarchy (id) ON DELETE CASCADE
-                        )
-                      `);
-
-                      // Create chapters table
-                      db.run(`
-                        CREATE TABLE IF NOT EXISTS chapters (
-                          id INTEGER PRIMARY KEY AUTOINCREMENT,
-                          directory_id INTEGER,
-                          folder_id INTEGER,
-                          name TEXT NOT NULL,
-                          filename TEXT NOT NULL,
-                          path TEXT NOT NULL,
-                          original_path TEXT,
-                          type TEXT DEFAULT 'html',
-                          sort_order INTEGER DEFAULT 0,
-                          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                          FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
-                          FOREIGN KEY (folder_id) REFERENCES folder_hierarchy (id) ON DELETE SET NULL
-                        )
-                      `);
-
-                      // Mark migration as completed
-                      db.run(
-                        "INSERT INTO migrations (name) VALUES ('add_category_support')",
-                        (err) => {
-                          if (err) {
-                            reject(err);
-                          } else {
-                            console.log('Migration completed: add_category_support');
-                            // Run additional migration for chapters table
-                            runChaptersTableMigration(db, resolve, reject);
-                          }
-                        }
-                      );
-                    }
-                  );
-                }
-              );
+              runCategorySupportMigration(db, () => {
+                // After category support migration, run progress tracking migration
+                runProgressTrackingMigration(db, resolve, reject);
+              }, reject);
             } else {
               console.log('Migration already applied: add_category_support');
               // Still run chapters table migration in case it's missing
-              runChaptersTableMigration(db, resolve, reject);
+              runChaptersTableMigration(db, () => {
+                // After chapters table migration, run progress tracking migration
+                runProgressTrackingMigration(db, resolve, reject);
+              }, reject);
             }
           }
         );
       });
     });
   });
+}
+
+function runCategorySupportMigration(db: sqlite3.Database, resolve: () => void, reject: (error: Error) => void) {
+  // Create tables first if they don't exist
+  db.run(`
+    CREATE TABLE IF NOT EXISTS selected_directories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      original_path TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create categories table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS course_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      color TEXT DEFAULT '#3b82f6',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Check if category_id column exists before adding it
+  db.all(
+    "PRAGMA table_info(selected_directories)",
+    (err, columns: any[]) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      const hasCategoryId = columns.some(col => col.name === 'category_id');
+      
+      if (!hasCategoryId) {
+        // Add category_id column to selected_directories
+        db.run(`
+          ALTER TABLE selected_directories 
+          ADD COLUMN category_id INTEGER REFERENCES course_categories(id)
+        `);
+      }
+
+      // Create folder_hierarchy table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS folder_hierarchy (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          directory_id INTEGER,
+          parent_id INTEGER,
+          folder_name TEXT NOT NULL,
+          display_name TEXT,
+          folder_path TEXT NOT NULL,
+          level INTEGER DEFAULT 0,
+          sort_order INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
+          FOREIGN KEY (parent_id) REFERENCES folder_hierarchy (id) ON DELETE CASCADE
+        )
+      `);
+
+      // Create chapters table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS chapters (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          directory_id INTEGER,
+          folder_id INTEGER,
+          name TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          path TEXT NOT NULL,
+          original_path TEXT,
+          type TEXT DEFAULT 'html',
+          sort_order INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
+          FOREIGN KEY (folder_id) REFERENCES folder_hierarchy (id) ON DELETE SET NULL
+        )
+      `);
+
+      // Mark migration as completed
+      db.run(
+        "INSERT INTO migrations (name) VALUES ('add_category_support')",
+        (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            console.log('Migration completed: add_category_support');
+            resolve();
+          }
+        }
+      );
+    }
+  );
 }
 
 function runChaptersTableMigration(db: sqlite3.Database, resolve: () => void, reject: (error: Error) => void) {
@@ -188,17 +185,71 @@ function runChaptersTableMigration(db: sqlite3.Database, resolve: () => void, re
             reject(err);
           } else {
             console.log('Chapters table created successfully');
-            db.close((closeErr) => {
-              if (closeErr) {
-                reject(closeErr);
-              } else {
-                resolve();
-              }
-            });
+            resolve();
           }
         });
       } else {
         console.log('Chapters table already exists');
+        resolve();
+      }
+    }
+  );
+}
+
+function runProgressTrackingMigration(db: sqlite3.Database, resolve: () => void, reject: (error: Error) => void) {
+  // Check if progress tracking migration has been applied
+  db.get(
+    "SELECT name FROM migrations WHERE name = 'add_progress_tracking'",
+    (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      if (!row) {
+        console.log('Running migration: add_progress_tracking');
+        
+        // Create chapter_progress table
+        db.run(`
+          CREATE TABLE IF NOT EXISTS chapter_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            directory_id INTEGER,
+            chapter_path TEXT NOT NULL,
+            completed BOOLEAN DEFAULT FALSE,
+            completed_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
+            UNIQUE(directory_id, chapter_path)
+          )
+        `, (err) => {
+          if (err) {
+            console.error('Error creating chapter_progress table:', err);
+            reject(err);
+            return;
+          }
+
+          // Mark migration as completed
+          db.run(
+            "INSERT INTO migrations (name) VALUES ('add_progress_tracking')",
+            (err) => {
+              if (err) {
+                reject(err);
+              } else {
+                console.log('Migration completed: add_progress_tracking');
+                db.close((closeErr) => {
+                  if (closeErr) {
+                    reject(closeErr);
+                  } else {
+                    resolve();
+                  }
+                });
+              }
+            }
+          );
+        });
+      } else {
+        console.log('Migration already applied: add_progress_tracking');
         db.close((closeErr) => {
           if (closeErr) {
             reject(closeErr);

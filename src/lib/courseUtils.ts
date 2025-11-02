@@ -174,15 +174,35 @@ export async function getCourseStructure(): Promise<CourseStructure> {
         // Get custom names and apply them
         const customNames = await directoryManager.getCustomNames(selectedDir.id);
         
+        // Get progress information
+        const courseProgress = await directoryManager.getCourseProgress(selectedDir.id);
+        const chapterProgress = await directoryManager.getChapterProgress(selectedDir.id);
+        
+        // Create progress map for easy lookup
+        const progressMap = new Map<string, boolean>();
+        chapterProgress.forEach(cp => {
+          progressMap.set(cp.chapter_path, cp.completed);
+        });
+        
+        // Apply progress to chapters
+        const chaptersWithProgress = chapters.filter((c: any) => !c.folderId && !c.folder_id).map((chapter: any) => ({
+          ...chapter,
+          completed: progressMap.get(chapter.path) || false
+        }));
+        
+        // Apply progress to folder chapters
+        const foldersWithProgress = await applyProgressToFolders(rootFolders, progressMap);
+        
         courses.push({
           name: selectedDir.display_name,
           path: selectedDir.original_path,
-          chapters: await applyCustomNames(chapters.filter((c: any) => !c.folderId && !c.folder_id), customNames),
-          folders: await applyCustomNamesToFolders(rootFolders, customNames),
+          chapters: await applyCustomNames(chaptersWithProgress, customNames),
+          folders: await applyCustomNamesToFolders(foldersWithProgress, customNames),
           originalPath: selectedDir.original_path,
           directoryId: selectedDir.id,
           categoryId: selectedDir.category_id,
-          category: selectedDir.category
+          category: selectedDir.category,
+          progress: courseProgress
         });
       }
     }
@@ -303,6 +323,21 @@ async function applyCustomNamesToFolders(folders: CourseFolder[], customNames: a
   }
   
   return updateFolderNames(folders);
+}
+
+async function applyProgressToFolders(folders: CourseFolder[], progressMap: Map<string, boolean>): Promise<CourseFolder[]> {
+  function updateFolderProgress(folders: CourseFolder[]): CourseFolder[] {
+    return folders.map(folder => ({
+      ...folder,
+      children: updateFolderProgress(folder.children),
+      chapters: folder.chapters.map(chapter => ({
+        ...chapter,
+        completed: progressMap.get(chapter.path) || false
+      }))
+    }));
+  }
+  
+  return updateFolderProgress(folders);
 }
 
 async function applyCustomNames(chapters: Chapter[], customNames: any[]): Promise<Chapter[]> {

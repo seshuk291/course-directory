@@ -119,6 +119,16 @@ export interface FolderHierarchy {
   updated_at: string;
 }
 
+export interface ChapterProgress {
+  id: number;
+  directory_id: number;
+  chapter_path: string;
+  completed: boolean;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CustomName {
   id: number;
   directory_id: number;
@@ -489,6 +499,119 @@ export class DirectoryManager {
           resolve(result);
         }
       });
+    });
+  }
+
+  // Progress tracking methods
+  async markChapterCompleted(directoryId: number, chapterPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO chapter_progress (directory_id, chapter_path, completed, completed_at, updated_at) 
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `);
+      
+      stmt.run([directoryId, chapterPath, true], (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+      
+      stmt.finalize();
+    });
+  }
+
+  async markChapterIncomplete(directoryId: number, chapterPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO chapter_progress (directory_id, chapter_path, completed, completed_at, updated_at) 
+        VALUES (?, ?, ?, NULL, CURRENT_TIMESTAMP)
+      `);
+      
+      stmt.run([directoryId, chapterPath, false], (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+      
+      stmt.finalize();
+    });
+  }
+
+  async getChapterProgress(directoryId: number): Promise<ChapterProgress[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      this.db.all(
+        'SELECT * FROM chapter_progress WHERE directory_id = ?',
+        [directoryId],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows as ChapterProgress[]);
+          }
+        }
+      );
+    });
+  }
+
+  async getCourseProgress(directoryId: number): Promise<{ total: number; completed: number; percentage: number }> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      // Get total chapters for this course
+      this.db.get(
+        'SELECT COUNT(*) as total FROM chapters WHERE directory_id = ?',
+        [directoryId],
+        (err, totalRow: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const total = totalRow?.total || 0;
+
+          // Get completed chapters for this course
+          if (!this.db) {
+            reject(new Error('Database not initialized'));
+            return;
+          }
+
+          this.db.get(
+            'SELECT COUNT(*) as completed FROM chapter_progress WHERE directory_id = ? AND completed = ?',
+            [directoryId, true],
+            (err, completedRow: any) => {
+              if (err) {
+                reject(err);
+              } else {
+                const completed = completedRow?.completed || 0;
+                const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+                resolve({ total, completed, percentage });
+              }
+            }
+          );
+        }
+      );
     });
   }
 }

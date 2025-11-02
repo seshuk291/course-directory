@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Course, Chapter, CourseFolder } from '@/types/course';
 import { 
   ChevronLeftIcon,
@@ -10,7 +10,8 @@ import {
   PlayIcon,
   FolderIcon,
   FolderOpenIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  BoltIcon
 } from '@heroicons/react/24/outline';
 import ContentViewer from './ContentViewer';
 
@@ -30,6 +31,73 @@ export default function CourseViewer({ course, onBackToDashboard }: CourseViewer
   const [loading, setLoading] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [completedChapters, setCompletedChapters] = useState<Set<string>>(new Set());
+  const [autoCompleteEnabled, setAutoCompleteEnabled] = useState(true);
+
+  // Load progress when component mounts
+  useEffect(() => {
+    if (course.directoryId) {
+      loadProgress();
+    }
+    
+    // Load auto-complete preference from localStorage
+    const savedAutoComplete = localStorage.getItem('courseViewerAutoComplete');
+    if (savedAutoComplete !== null) {
+      setAutoCompleteEnabled(savedAutoComplete === 'true');
+    }
+  }, [course.directoryId]);
+
+  // Save auto-complete preference when it changes
+  useEffect(() => {
+    localStorage.setItem('courseViewerAutoComplete', autoCompleteEnabled.toString());
+  }, [autoCompleteEnabled]);
+
+  const loadProgress = async () => {
+    if (!course.directoryId) return;
+
+    try {
+      const response = await fetch(`/api/directories/${course.directoryId}/progress`);
+      if (response.ok) {
+        const data = await response.json();
+        const completed = new Set<string>();
+        data.chapterProgress.forEach((cp: any) => {
+          if (cp.completed) {
+            completed.add(cp.chapter_path);
+          }
+        });
+        setCompletedChapters(completed);
+      }
+    } catch (error) {
+      console.error('Error loading progress:', error);
+    }
+  };
+
+  const updateChapterProgress = async (chapterPath: string, completed: boolean) => {
+    if (!course.directoryId) return;
+
+    try {
+      const response = await fetch(`/api/directories/${course.directoryId}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chapterPath,
+          completed
+        })
+      });
+
+      if (response.ok) {
+        // Update local state
+        const newCompleted = new Set(completedChapters);
+        if (completed) {
+          newCompleted.add(chapterPath);
+        } else {
+          newCompleted.delete(chapterPath);
+        }
+        setCompletedChapters(newCompleted);
+      }
+    } catch (error) {
+      console.error('Error updating progress:', error);
+    }
+  };
 
   const formatChapterTitle = (chapterName: string): string => {
     return chapterName
@@ -69,9 +137,33 @@ export default function CourseViewer({ course, onBackToDashboard }: CourseViewer
     setLoading(true);
     setSelectedChapter({ course: courseName, chapter: chapterFilename, title: chapterTitle, type: chapterType });
     
+    // Find the chapter object to get the correct key format
+    const findChapter = (chapters: Chapter[], filename: string): Chapter | null => {
+      return chapters.find(ch => ch.filename === filename) || null;
+    };
+    
+    const findChapterInFolders = (folders: CourseFolder[], filename: string): Chapter | null => {
+      for (const folder of folders) {
+        const found = findChapter(folder.chapters, filename);
+        if (found) return found;
+        
+        const foundInSubfolder = findChapterInFolders(folder.children, filename);
+        if (foundInSubfolder) return foundInSubfolder;
+      }
+      return null;
+    };
+    
+    // Get the chapter object to determine the correct key
+    const chapter = findChapter(course.chapters, chapterFilename) || findChapterInFolders(course.folders, chapterFilename);
+    const chapterKey = chapter?.path || `${courseName}/${chapterFilename}`;
+    
     if (chapterType === 'video') {
       setContent(null);
       setLoading(false);
+      // Auto-complete for videos when they are opened (if enabled)
+      if (autoCompleteEnabled && !completedChapters.has(chapterKey)) {
+        updateChapterProgress(chapterKey, true);
+      }
     } else {
       try {
         const response = await fetch(`/api/courses/${courseName}/${encodeURIComponent(chapterFilename)}`);
@@ -79,6 +171,10 @@ export default function CourseViewer({ course, onBackToDashboard }: CourseViewer
         
         if (response.ok) {
           setContent(data.content);
+          // Auto-complete for HTML content when successfully loaded (if enabled)
+          if (autoCompleteEnabled && !completedChapters.has(chapterKey)) {
+            updateChapterProgress(chapterKey, true);
+          }
         } else {
           console.error('Error fetching chapter content:', data.error);
           setContent('<div style="padding: 20px; color: red;">Error loading chapter content</div>');
@@ -103,13 +199,8 @@ export default function CourseViewer({ course, onBackToDashboard }: CourseViewer
   };
 
   const markChapterComplete = (chapterKey: string) => {
-    const newCompleted = new Set(completedChapters);
-    if (newCompleted.has(chapterKey)) {
-      newCompleted.delete(chapterKey);
-    } else {
-      newCompleted.add(chapterKey);
-    }
-    setCompletedChapters(newCompleted);
+    const isCurrentlyCompleted = completedChapters.has(chapterKey);
+    updateChapterProgress(chapterKey, !isCurrentlyCompleted);
   };
 
   const getVideoUrl = () => {
@@ -120,7 +211,7 @@ export default function CourseViewer({ course, onBackToDashboard }: CourseViewer
   };
 
   const renderChapter = (chapter: Chapter, level: number = 0) => {
-    const chapterKey = `${course.name}/${chapter.filename}`;
+    const chapterKey = chapter.path || `${course.name}/${chapter.filename}`;
     const isSelected = selectedChapter?.course === course.name && selectedChapter?.chapter === chapter.filename;
     const isCompleted = completedChapters.has(chapterKey);
     
@@ -247,6 +338,27 @@ export default function CourseViewer({ course, onBackToDashboard }: CourseViewer
               className="bg-green-500 h-2 rounded-full transition-all duration-300"
               style={{ width: `${(getCompletedCount() / getTotalChapters()) * 100 || 0}%` }}
             />
+          </div>
+          
+          {/* Auto-complete toggle */}
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center space-x-1">
+              <span className="text-xs text-gray-600">Auto-mark as completed</span>
+              {autoCompleteEnabled && <BoltIcon className="h-3 w-3 text-blue-500" />}
+            </div>
+            <button
+              onClick={() => setAutoCompleteEnabled(!autoCompleteEnabled)}
+              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                autoCompleteEnabled ? 'bg-blue-600' : 'bg-gray-300'
+              }`}
+              title={autoCompleteEnabled ? 'Auto-completion enabled' : 'Auto-completion disabled'}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                  autoCompleteEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
           </div>
         </div>
 

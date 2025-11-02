@@ -6,6 +6,7 @@ export interface Chapter {
   type: 'html' | 'video'; // File type to determine how to render
   folderId?: number; // Reference to folder hierarchy (also support folder_id from database)
   folder_id?: number; // Database field name
+  completed?: boolean; // Progress tracking
 }
 
 export interface CourseFolder {
@@ -20,6 +21,22 @@ export interface CourseFolder {
   sortOrder: number;
 }
 
+export interface CourseProgress {
+  total: number;
+  completed: number;
+  percentage: number;
+}
+
+export interface ChapterProgress {
+  id: number;
+  directory_id: number;
+  chapter_path: string;
+  completed: boolean;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Course {
   name: string;
   path: string;
@@ -29,6 +46,7 @@ export interface Course {
   directoryId?: number; // Database ID for selected directory
   categoryId?: number; // Category ID
   category?: CourseCategory;
+  progress?: CourseProgress; // Progress tracking
 }
 
 export interface CourseCategory {

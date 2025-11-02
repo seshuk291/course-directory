@@ -113,6 +113,7 @@ export default function Dashboard({ onCourseSelect }: DashboardProps) {
 
   const renderCourseCard = (course: Course) => {
     const { totalChapters, videoCount } = getCourseStats(course);
+    const progress = course.progress;
     
     return (
       <div
@@ -124,6 +125,13 @@ export default function Dashboard({ onCourseSelect }: DashboardProps) {
           <div className="absolute inset-0 flex items-center justify-center">
             <AcademicCapIcon className="h-16 w-16 text-white opacity-80" />
           </div>
+          {progress && progress.total > 0 && (
+            <div className="absolute top-4 right-4">
+              <div className="bg-white/20 backdrop-blur-sm rounded-full px-3 py-1">
+                <span className="text-white text-sm font-medium">{progress.percentage}%</span>
+              </div>
+            </div>
+          )}
           <div className="absolute bottom-4 left-4 right-4">
             <h3 className="text-white font-semibold text-lg line-clamp-2">
               {formatCourseTitle(course.name)}
@@ -132,6 +140,21 @@ export default function Dashboard({ onCourseSelect }: DashboardProps) {
         </div>
         
         <div className="p-4">
+          {progress && progress.total > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                <span>Progress</span>
+                <span>{progress.completed} of {progress.total} chapters</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress.percentage}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
+          
           <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
             <div className="flex items-center space-x-1">
               <DocumentTextIcon className="h-4 w-4" />
@@ -154,7 +177,7 @@ export default function Dashboard({ onCourseSelect }: DashboardProps) {
           
           <div className="mt-3 flex items-center justify-between">
             <span className="text-sm text-blue-600 font-medium group-hover:text-blue-800 transition-colors">
-              Start Learning
+              {progress && progress.percentage === 100 ? 'Review Course' : progress && progress.percentage > 0 ? 'Continue Learning' : 'Start Learning'}
             </span>
             <ChevronRightIcon className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
           </div>
