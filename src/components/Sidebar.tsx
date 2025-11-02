@@ -11,12 +11,14 @@ import {
   PlayIcon,
   FolderIcon,
   FolderOpenIcon,
+  FolderPlusIcon,
   TagIcon,
   Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 import DirectoryManager from './DirectoryManager';
 import CategoryManager from './CategoryManager';
 import CourseEditModal from './CourseEditModal';
+import SubdirectoryManager from './SubdirectoryManager';
 
 interface SidebarProps {
   onChapterSelect: (courseName: string, chapterFilename: string, chapterTitle: string, chapterType?: 'html' | 'video') => void;
@@ -41,6 +43,8 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
   const [showCourseEditModal, setShowCourseEditModal] = useState(false);
   const [editingCourseData, setEditingCourseData] = useState<Course | null>(null);
   const [groupByCategory, setGroupByCategory] = useState(true);
+  const [showSubdirectoryManager, setShowSubdirectoryManager] = useState(false);
+  const [selectedCourseForSubdirs, setSelectedCourseForSubdirs] = useState<Course | null>(null);
 
   useEffect(() => {
     fetchCourses();
@@ -280,6 +284,17 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  setSelectedCourseForSubdirs(course);
+                  setShowSubdirectoryManager(true);
+                }}
+                className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
+                title="Organize into folders"
+              >
+                <FolderPlusIcon className="h-3 w-3" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleEditCourse(course);
                 }}
                 className="p-1 text-gray-400 hover:text-green-600 transition-colors"
@@ -499,6 +514,19 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
         }}
         onUpdate={handleCourseUpdate}
       />
+
+      {selectedCourseForSubdirs && (
+        <SubdirectoryManager
+          isOpen={showSubdirectoryManager}
+          onClose={() => {
+            setShowSubdirectoryManager(false);
+            setSelectedCourseForSubdirs(null);
+          }}
+          directoryId={selectedCourseForSubdirs.directoryId!}
+          courseName={selectedCourseForSubdirs.name}
+          onStructureUpdate={fetchCourses}
+        />
+      )}
     </div>
   );
 }

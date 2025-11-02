@@ -105,6 +105,25 @@ export async function runMigrations(): Promise<void> {
                         )
                       `);
 
+                      // Create chapters table
+                      db.run(`
+                        CREATE TABLE IF NOT EXISTS chapters (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          directory_id INTEGER,
+                          folder_id INTEGER,
+                          name TEXT NOT NULL,
+                          filename TEXT NOT NULL,
+                          path TEXT NOT NULL,
+                          original_path TEXT,
+                          type TEXT DEFAULT 'html',
+                          sort_order INTEGER DEFAULT 0,
+                          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                          FOREIGN KEY (directory_id) REFERENCES selected_directories (id) ON DELETE CASCADE,
+                          FOREIGN KEY (folder_id) REFERENCES folder_hierarchy (id) ON DELETE SET NULL
+                        )
+                      `);
+
                       // Mark migration as completed
                       db.run(
                         "INSERT INTO migrations (name) VALUES ('add_category_support')",

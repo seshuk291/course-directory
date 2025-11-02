@@ -492,3 +492,77 @@ export class DirectoryManager {
     });
   }
 }
+
+// Utility functions for folder management
+export async function getDirectoryFolders(directoryId: number): Promise<any[]> {
+  const db = await initDatabase();
+  
+  return new Promise((resolve, reject) => {
+    db.all(
+      'SELECT * FROM folder_hierarchy WHERE directory_id = ? ORDER BY level, sort_order, folder_name',
+      [directoryId],
+      (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows || []);
+        }
+      }
+    );
+  });
+}
+
+export async function createFolder(
+  directoryId: number, 
+  name: string, 
+  displayName: string, 
+  parentId?: number
+): Promise<number> {
+  const db = await initDatabase();
+  
+  return new Promise((resolve, reject) => {
+    // Calculate level
+    let level = 0;
+    if (parentId) {
+      db.get(
+        'SELECT level FROM folder_hierarchy WHERE id = ?',
+        [parentId],
+        (err, row: any) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          level = (row?.level || 0) + 1;
+          
+          // Insert the folder
+          db.run(
+            `INSERT INTO folder_hierarchy (directory_id, parent_id, folder_name, display_name, folder_path, level) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [directoryId, parentId, name, displayName, name, level],
+            function(err) {
+              if (err) {
+                reject(err);
+              } else {
+                resolve(this.lastID);
+              }
+            }
+          );
+        }
+      );
+    } else {
+      // Root level folder
+      db.run(
+        `INSERT INTO folder_hierarchy (directory_id, parent_id, folder_name, display_name, folder_path, level) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [directoryId, null, name, displayName, name, 0],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.lastID);
+          }
+        }
+      );
+    }
+  });
+}

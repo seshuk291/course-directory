@@ -14,8 +14,8 @@ export async function GET(
     
     // If not found, check if it's from a selected directory
     if (!content) {
-      const courses = await getCourseStructure();
-      const targetCourse = courses.find(c => c.name === course);
+      const courseStructure = await getCourseStructure();
+      const targetCourse = courseStructure?.courses?.find(c => c.name === course);
       
       if (targetCourse && targetCourse.directoryId) {
         content = await getChapterContentFromSelectedDir(targetCourse.directoryId, decodedChapter);
