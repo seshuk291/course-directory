@@ -50,6 +50,74 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
     fetchCourses();
   }, []);
 
+  // Function to format chapter names into better titles
+  const formatChapterTitle = (chapterName: string): string => {
+    return chapterName
+      // Remove file extensions
+      .replace(/\.(html|htm|md|txt)$/i, '')
+      // Remove common prefixes like numbers, brackets, and build indicators
+      .replace(/^\d+\s*[-.]?\s*/, '')
+      .replace(/^\[.*?\]\s*/, '')
+      .replace(/^\(.*?\)\s*/, '')
+      .replace(/^(Build|Chapter|Lesson|Part|Section)\s*[-:]?\s*/i, '')
+      // Replace hyphens and underscores with spaces
+      .replace(/[-_]/g, ' ')
+      // Split camelCase and PascalCase
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      // Clean up multiple spaces
+      .replace(/\s+/g, ' ')
+      .trim()
+      // Capitalize first letter of each sentence
+      .split('. ')
+      .map(sentence => sentence.charAt(0).toUpperCase() + sentence.slice(1).toLowerCase())
+      .join('. ')
+      // Fix common technical terms
+      .replace(/\bAi\b/g, 'AI')
+      .replace(/\bApi\b/g, 'API')
+      .replace(/\bUi\b/g, 'UI')
+      .replace(/\bUx\b/g, 'UX')
+      .replace(/\bCss\b/g, 'CSS')
+      .replace(/\bHtml\b/g, 'HTML')
+      .replace(/\bJs\b/g, 'JavaScript')
+      .replace(/\bTs\b/g, 'TypeScript');
+  };
+
+  // Function to format course names into better titles
+  const formatCourseTitle = (courseName: string): string => {
+    return courseName
+      // Replace hyphens and underscores with spaces
+      .replace(/[-_]/g, ' ')
+      // Remove common prefixes like numbers and brackets
+      .replace(/^\d+\s*[-.]?\s*/, '')
+      .replace(/^\[.*?\]\s*/, '')
+      // Split camelCase and PascalCase
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      // Capitalize each word properly
+      .split(' ')
+      .map(word => {
+        // Don't capitalize common small words unless they're the first word
+        const smallWords = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'if', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'with'];
+        const lowerWord = word.toLowerCase();
+        return smallWords.includes(lowerWord) ? lowerWord : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ')
+      // Capitalize first word always
+      .replace(/^./, str => str.toUpperCase())
+      // Fix common technical terms
+      .replace(/\bAi\b/g, 'AI')
+      .replace(/\bApi\b/g, 'API')
+      .replace(/\bUi\b/g, 'UI')
+      .replace(/\bUx\b/g, 'UX')
+      .replace(/\bCss\b/g, 'CSS')
+      .replace(/\bHtml\b/g, 'HTML')
+      .replace(/\bJs\b/g, 'JavaScript')
+      .replace(/\bTs\b/g, 'TypeScript')
+      .replace(/\bReact\b/g, 'React')
+      .replace(/\bNode\b/g, 'Node.js')
+      .replace(/\bVue\b/g, 'Vue.js')
+      .replace(/\bAngular\b/g, 'Angular');
+  };
+
   const fetchCourses = async () => {
     try {
       const response = await fetch('/api/courses');
@@ -199,18 +267,20 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
       <div key={folderKey} style={{ marginLeft: `${level * 16}px` }}>
         <button
           onClick={() => toggleFolder(folderKey)}
-          className="flex items-center space-x-2 px-3 py-2 text-sm hover:bg-gray-100 transition-colors w-full text-left"
+          className="flex items-center space-x-3 px-4 py-2 text-sm hover:bg-gray-100 transition-colors w-full text-left rounded-md"
         >
           {isExpanded ? (
-            <FolderOpenIcon className="h-4 w-4 text-blue-600" />
+            <FolderOpenIcon className="h-4 w-4 text-blue-600 shrink-0" />
           ) : (
-            <FolderIcon className="h-4 w-4 text-gray-600" />
+            <FolderIcon className="h-4 w-4 text-gray-600 shrink-0" />
           )}
-          <span className="text-gray-700">{folder.displayName || folder.name}</span>
+          <span className="text-gray-700 font-medium flex-1">
+            {formatCourseTitle(folder.displayName || folder.name)}
+          </span>
           {isExpanded ? (
-            <ChevronDownIcon className="h-3 w-3 text-gray-500 ml-auto" />
+            <ChevronDownIcon className="h-3 w-3 text-gray-500 shrink-0" />
           ) : (
-            <ChevronRightIcon className="h-3 w-3 text-gray-500 ml-auto" />
+            <ChevronRightIcon className="h-3 w-3 text-gray-500 shrink-0" />
           )}
         </button>
         
@@ -220,11 +290,11 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
             {folder.chapters.map((chapter: any) => (
               <div
                 key={chapter.filename}
-                className={`flex items-start justify-between px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
+                className={`flex items-start justify-between px-4 py-2 text-sm hover:bg-blue-50 transition-colors border-l-2 ${
                   selectedChapter?.course === courseName && 
                   selectedChapter?.chapter === chapter.filename
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'text-gray-600'
+                    ? 'bg-blue-100 text-blue-800 border-l-blue-500'
+                    : 'text-gray-600 border-l-transparent hover:border-l-blue-200'
                 }`}
                 style={{ marginLeft: `${(level + 1) * 16}px` }}
               >
@@ -237,7 +307,14 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
                   ) : (
                     <DocumentIcon className="h-4 w-4 shrink-0 mt-0.5" />
                   )}
-                  <span className="text-wrap leading-relaxed">{chapter.name}</span>
+                  <div className="flex flex-col flex-1">
+                    <span className="text-wrap leading-relaxed font-medium">
+                      {formatChapterTitle(chapter.name)}
+                    </span>
+                    {chapter.type === 'video' && (
+                      <span className="text-xs text-gray-500 mt-0.5">Video Content</span>
+                    )}
+                  </div>
                 </button>
               </div>
             ))}
@@ -253,23 +330,30 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
   };
 
   const renderCourse = (course: Course) => (
-    <div key={course.name} className="border border-gray-200 rounded-lg bg-white">
-      <div className="flex items-center justify-between px-3 py-2">
+    <div key={course.name} className="border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between px-4 py-3">
         <button
           onClick={() => toggleCourse(course.name)}
-          className="flex-1 text-left flex items-center justify-between hover:bg-gray-50 rounded-lg transition-colors"
+          className="flex-1 text-left flex items-center justify-between hover:bg-gray-50 rounded-lg transition-colors p-2 -m-2"
         >
-          <div className="flex items-center space-x-2 flex-1">
+          <div className="flex items-center space-x-3 flex-1">
             {course.category && (
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-1 h-8 rounded-full shrink-0"
                 style={{ backgroundColor: course.category.color }}
                 title={course.category.name}
               />
             )}
-            <span className="font-medium text-gray-700 capitalize text-wrap leading-relaxed flex-1 pr-2">
-              {course.name.replace(/-/g, ' ')}
-            </span>
+            <div className="flex flex-col flex-1 text-left pr-2">
+              <span className="font-semibold text-gray-800 text-sm leading-tight">
+                {formatCourseTitle(course.name)}
+              </span>
+              {course.category && (
+                <span className="text-xs text-gray-500 mt-0.5">
+                  {course.category.name}
+                </span>
+              )}
+            </div>
           </div>
           {expandedCourses.has(course.name) ? (
             <ChevronDownIcon className="h-4 w-4 text-gray-500 shrink-0" />
@@ -337,11 +421,11 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
               {course.chapters.map((chapter: any) => (
                 <div
                   key={chapter.filename}
-                  className={`flex items-start justify-between px-3 py-3 text-sm hover:bg-blue-50 transition-colors ${
+                  className={`flex items-start justify-between px-4 py-3 text-sm hover:bg-blue-50 transition-colors border-l-2 ${
                     selectedChapter?.course === course.name && 
                     selectedChapter?.chapter === chapter.filename
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'text-gray-600'
+                      ? 'bg-blue-100 text-blue-800 border-l-blue-500'
+                      : 'text-gray-600 border-l-transparent hover:border-l-blue-200'
                   }`}
                 >
                   <button
@@ -353,7 +437,14 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
                     ) : (
                       <DocumentIcon className="h-4 w-4 shrink-0 mt-0.5" />
                     )}
-                    <span className="text-wrap leading-relaxed">{chapter.name}</span>
+                    <div className="flex flex-col flex-1">
+                      <span className="text-wrap leading-relaxed font-medium">
+                        {formatChapterTitle(chapter.name)}
+                      </span>
+                      {chapter.type === 'video' && (
+                        <span className="text-xs text-gray-500 mt-0.5">Video Content</span>
+                      )}
+                    </div>
                   </button>
                   {course.directoryId && (
                     <button
@@ -398,18 +489,22 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
           const isExpanded = expandedCategories.has(category.id);
 
           return (
-            <div key={category.id} className="border border-gray-300 rounded-lg">
+            <div key={category.id} className="border border-gray-200 rounded-lg bg-white shadow-sm">
               <button
                 onClick={() => toggleCategory(category.id)}
-                className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors rounded-lg"
               >
                 <div className="flex items-center space-x-3">
                   <div
-                    className="w-4 h-4 rounded-full"
+                    className="w-3 h-8 rounded-full"
                     style={{ backgroundColor: category.color }}
                   />
-                  <span className="font-semibold text-gray-800">{category.name}</span>
-                  <span className="text-sm text-gray-500">({coursesInCategory.length})</span>
+                  <div className="flex flex-col text-left">
+                    <span className="font-semibold text-gray-800 text-lg">{category.name}</span>
+                    <span className="text-sm text-gray-500">
+                      {coursesInCategory.length} course{coursesInCategory.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 </div>
                 {isExpanded ? (
                   <ChevronDownIcon className="h-5 w-5 text-gray-500" />
@@ -433,9 +528,19 @@ export default function Sidebar({ onChapterSelect, selectedChapter }: SidebarPro
           if (uncategorizedCourses.length === 0) return null;
 
           return (
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-2 px-2">Uncategorized</h3>
-              <div className="space-y-2">
+            <div className="border border-gray-200 rounded-lg bg-white shadow-sm">
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center space-x-3">
+                  <div className="w-3 h-8 rounded-full bg-gray-400" />
+                  <div className="flex flex-col text-left">
+                    <span className="font-semibold text-gray-800 text-lg">Uncategorized</span>
+                    <span className="text-sm text-gray-500">
+                      {uncategorizedCourses.length} course{uncategorizedCourses.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2 space-y-2">
                 {uncategorizedCourses.map((course: Course) => renderCourse(course))}
               </div>
             </div>
