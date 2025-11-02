@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { PlusIcon, FolderOpenIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { PlusIcon, FolderOpenIcon, TrashIcon, TagIcon } from '@heroicons/react/24/outline';
+import { CourseCategory } from '@/types/course';
 
 interface DirectoryManagerProps {
   onDirectoryAdded: () => void;
@@ -11,7 +12,25 @@ export default function DirectoryManager({ onDirectoryAdded }: DirectoryManagerP
   const [isOpen, setIsOpen] = useState(false);
   const [directoryPath, setDirectoryPath] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | undefined>();
+  const [categories, setCategories] = useState<CourseCategory[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data.categories);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const handleAddDirectory = async () => {
     if (!directoryPath.trim() || !displayName.trim()) {
@@ -36,6 +55,7 @@ export default function DirectoryManager({ onDirectoryAdded }: DirectoryManagerP
         body: JSON.stringify({
           originalPath: trimmedPath,
           displayName: displayName.trim(),
+          categoryId: selectedCategoryId,
         }),
       });
 
@@ -44,6 +64,7 @@ export default function DirectoryManager({ onDirectoryAdded }: DirectoryManagerP
       if (response.ok) {
         setDirectoryPath('');
         setDisplayName('');
+        setSelectedCategoryId(undefined);
         setIsOpen(false);
         onDirectoryAdded();
         alert('Directory added successfully!');
@@ -94,7 +115,7 @@ Note: Due to browser security restrictions, we cannot directly browse your file 
                   value={directoryPath}
                   onChange={(e) => setDirectoryPath(e.target.value)}
                   placeholder="e.g., C:\Users\YourName\Documents\MyCourse"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500"
                 />
                 <button
                   type="button"
@@ -119,10 +140,31 @@ Note: Due to browser security restrictions, we cannot directly browse your file 
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="e.g., My JavaScript Course"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500"
               />
               <p className="text-xs text-gray-500 mt-1">
                 How this course will appear in the sidebar
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Category (Optional)
+              </label>
+              <select
+                value={selectedCategoryId || ''}
+                onChange={(e) => setSelectedCategoryId(e.target.value ? parseInt(e.target.value) : undefined)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+              >
+                <option value="">No Category</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Choose a category to organize your courses
               </p>
             </div>
           </div>
@@ -140,6 +182,7 @@ Note: Due to browser security restrictions, we cannot directly browse your file 
                 setIsOpen(false);
                 setDirectoryPath('');
                 setDisplayName('');
+                setSelectedCategoryId(undefined);
               }}
               className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
             >

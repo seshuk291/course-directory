@@ -4,7 +4,7 @@ import fs from 'fs';
 
 export async function POST(request: NextRequest) {
   try {
-    const { originalPath, displayName } = await request.json();
+    const { originalPath, displayName, categoryId } = await request.json();
     
     if (!originalPath || !displayName) {
       return NextResponse.json(
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    const id = await addSelectedDirectory(originalPath, displayName);
+    const id = await addSelectedDirectory(originalPath, displayName, categoryId);
     return NextResponse.json({ id, success: true });
   } catch (error) {
     console.error('Error adding directory:', error);

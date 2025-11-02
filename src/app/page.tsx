@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import ContentViewer from '@/components/ContentViewer';
+import { CourseStructure } from '@/types/course';
 
 export default function Home() {
   const [selectedChapter, setSelectedChapter] = useState<{

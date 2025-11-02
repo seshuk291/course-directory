@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Course, Chapter } from '@/types/course';
+import { Course, Chapter, CourseStructure, CourseFolder, CourseCategory } from '@/types/course';
 import { DirectoryManager } from './database';
 
 const directoryManager = new DirectoryManager();
@@ -58,10 +58,19 @@ function getFileType(filename: string): 'html' | 'video' {
   return 'html'; // Default fallback
 }
 
-export async function getCourseStructure(): Promise<Course[]> {
+export async function getCourseStructure(): Promise<CourseStructure> {
   await ensureDbInitialized();
   
   const courses: Course[] = [];
+  const categories: CourseCategory[] = [];
+  
+  // Get categories
+  try {
+    const dbCategories = await directoryManager.getCategories();
+    categories.push(...dbCategories);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+  }
   
   // Get courses from the original courses directory (for backward compatibility)
   const coursesDir = path.join(process.cwd(), 'courses');
@@ -71,33 +80,37 @@ export async function getCourseStructure(): Promise<Course[]> {
     for (const courseItem of courseItems) {
       if (courseItem.isDirectory()) {
         const coursePath = path.join(coursesDir, courseItem.name);
-        const chapters = getChaptersFromDirectory(coursePath);
+        const { chapters, folders } = getChaptersAndFoldersFromDirectory(coursePath);
         
         courses.push({
           name: courseItem.name,
           path: coursePath,
           chapters,
+          folders,
           originalPath: coursePath
         });
       }
     }
   }
   
-  // Get courses from selected directories
+  // Get courses from selected directories with categories
   try {
-    const selectedDirectories = await directoryManager.getSelectedDirectories();
+    const selectedDirectories = await directoryManager.getDirectoriesWithCategories();
     
     for (const selectedDir of selectedDirectories) {
       if (fs.existsSync(selectedDir.original_path)) {
-        const chapters = getChaptersFromDirectory(selectedDir.original_path, selectedDir.id);
+        const { chapters, folders } = getChaptersAndFoldersFromDirectory(selectedDir.original_path, selectedDir.id);
         const customNames = await directoryManager.getCustomNames(selectedDir.id);
         
         courses.push({
           name: selectedDir.display_name,
           path: selectedDir.original_path,
           chapters: await applyCustomNames(chapters, customNames),
+          folders: await applyCustomNamesToFolders(folders, customNames),
           originalPath: selectedDir.original_path,
-          directoryId: selectedDir.id
+          directoryId: selectedDir.id,
+          categoryId: selectedDir.category_id,
+          category: selectedDir.category
         });
       }
     }
@@ -105,13 +118,14 @@ export async function getCourseStructure(): Promise<Course[]> {
     console.error('Error fetching selected directories:', error);
   }
   
-  return courses;
+  return { courses, categories };
 }
 
-function getChaptersFromDirectory(dirPath: string, directoryId?: number): Chapter[] {
+function getChaptersAndFoldersFromDirectory(dirPath: string, directoryId?: number): { chapters: Chapter[], folders: CourseFolder[] } {
   const chapters: Chapter[] = [];
+  const folderMap = new Map<string, CourseFolder>();
   
-  function walkDirectory(currentPath: string, relativePath: string = '') {
+  function walkDirectory(currentPath: string, relativePath: string = '', level: number = 0) {
     try {
       const items = fs.readdirSync(currentPath, { withFileTypes: true });
       
@@ -120,17 +134,43 @@ function getChaptersFromDirectory(dirPath: string, directoryId?: number): Chapte
         const relativeFilePath = path.join(relativePath, item.name);
         
         if (item.isDirectory()) {
+          // Create folder entry
+          const folderId = Math.random(); // Temporary ID for client-side organization
+          const folder: CourseFolder = {
+            id: folderId,
+            name: item.name,
+            displayName: getDisplayName(item.name),
+            path: relativeFilePath.replace(/\\/g, '/'),
+            level,
+            children: [],
+            chapters: [],
+            sortOrder: 0
+          };
+          
+          folderMap.set(relativeFilePath, folder);
+          
           // Recursively walk subdirectories
-          walkDirectory(fullPath, relativeFilePath);
+          walkDirectory(fullPath, relativeFilePath, level + 1);
         } else if (item.name.endsWith('.html') || isVideoFile(item.name)) {
           // Add HTML files and video files as chapters
-          chapters.push({
+          const chapter: Chapter = {
             name: getDisplayName(relativeFilePath),
             path: fullPath,
             filename: relativeFilePath.replace(/\\/g, '/'), // Convert to forward slashes for URL compatibility
             originalPath: fullPath,
             type: getFileType(item.name)
-          });
+          };
+          
+          // If this file is in a folder, add it to that folder's chapters
+          if (relativePath) {
+            const folder = folderMap.get(relativePath);
+            if (folder) {
+              folder.chapters.push(chapter);
+            }
+          } else {
+            // File is in root, add to main chapters array
+            chapters.push(chapter);
+          }
         }
       }
     } catch (error) {
@@ -140,8 +180,57 @@ function getChaptersFromDirectory(dirPath: string, directoryId?: number): Chapte
   
   walkDirectory(dirPath);
   
-  // Sort chapters naturally by extracting numbers from the beginning of filenames
-  return chapters.sort((a, b) => naturalSort(a.filename, b.filename));
+  // Build folder hierarchy
+  const folders = Array.from(folderMap.values());
+  const rootFolders: CourseFolder[] = [];
+  
+  // Sort chapters in each folder and root chapters
+  chapters.sort((a, b) => naturalSort(a.filename, b.filename));
+  folders.forEach(folder => {
+    folder.chapters.sort((a, b) => naturalSort(a.filename, b.filename));
+  });
+  
+  // Organize folders into hierarchy
+  folders.forEach(folder => {
+    const pathParts = folder.path.split('/');
+    if (pathParts.length === 1) {
+      // Root level folder
+      rootFolders.push(folder);
+    } else {
+      // Find parent folder
+      const parentPath = pathParts.slice(0, -1).join('/');
+      const parent = folderMap.get(parentPath);
+      if (parent) {
+        parent.children.push(folder);
+        folder.parentId = parent.id;
+      }
+    }
+  });
+  
+  return { chapters, folders: rootFolders };
+}
+
+async function applyCustomNamesToFolders(folders: CourseFolder[], customNames: any[]): Promise<CourseFolder[]> {
+  const customNameMap = new Map();
+  customNames.forEach(cn => {
+    if (cn.is_directory) {
+      customNameMap.set(cn.file_path, cn.custom_name);
+    }
+  });
+  
+  function updateFolderNames(folders: CourseFolder[]): CourseFolder[] {
+    return folders.map(folder => ({
+      ...folder,
+      displayName: customNameMap.get(folder.path) || folder.displayName,
+      children: updateFolderNames(folder.children),
+      chapters: folder.chapters.map(chapter => ({
+        ...chapter,
+        name: customNameMap.get(chapter.filename) || chapter.name
+      }))
+    }));
+  }
+  
+  return updateFolderNames(folders);
 }
 
 async function applyCustomNames(chapters: Chapter[], customNames: any[]): Promise<Chapter[]> {
@@ -205,9 +294,9 @@ export async function getChapterContentFromSelectedDir(directoryId: number, chap
   }
 }
 
-export async function addSelectedDirectory(originalPath: string, displayName: string): Promise<number> {
+export async function addSelectedDirectory(originalPath: string, displayName: string, categoryId?: number): Promise<number> {
   await ensureDbInitialized();
-  return directoryManager.addDirectory(originalPath, displayName);
+  return directoryManager.addDirectory(originalPath, displayName, categoryId);
 }
 
 export async function removeSelectedDirectory(id: number): Promise<void> {
@@ -218,4 +307,25 @@ export async function removeSelectedDirectory(id: number): Promise<void> {
 export async function setCustomFileName(directoryId: number, filePath: string, originalName: string, customName: string, isDirectory: boolean = false): Promise<void> {
   await ensureDbInitialized();
   return directoryManager.setCustomName(directoryId, filePath, originalName, customName, isDirectory);
+}
+
+// Category management functions
+export async function createCategory(name: string, description?: string, color?: string): Promise<number> {
+  await ensureDbInitialized();
+  return directoryManager.createCategory(name, description, color);
+}
+
+export async function getCategories(): Promise<CourseCategory[]> {
+  await ensureDbInitialized();
+  return directoryManager.getCategories();
+}
+
+export async function updateCategory(id: number, name: string, description?: string, color?: string): Promise<void> {
+  await ensureDbInitialized();
+  return directoryManager.updateCategory(id, name, description, color);
+}
+
+export async function deleteCategory(id: number): Promise<void> {
+  await ensureDbInitialized();
+  return directoryManager.deleteCategory(id);
 }

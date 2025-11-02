@@ -32,7 +32,8 @@ export default function VideoPlayer({ src, className = '' }: VideoPlayerProps) {
         const player = videojs(videoElement, {
           controls: true,
           responsive: true,
-          fluid: true,
+          fluid: false,
+          fill: true,
           playbackRates: [0.5, 1, 1.25, 1.5, 2],
           sources: [{
             src: src,
@@ -90,7 +91,7 @@ export default function VideoPlayer({ src, className = '' }: VideoPlayerProps) {
       <div 
         ref={videoRef} 
         className="video-js-container"
-        style={{ width: '80%', height: '80%' }}
+        style={{ width: '100%', height: '100%' }}
       />
     </div>
   );

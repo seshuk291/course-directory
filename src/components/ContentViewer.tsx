@@ -47,11 +47,13 @@ export default function ContentViewer({ content, title, loading, contentType = '
       
       <div className="flex-1 bg-white overflow-hidden">
         {contentType === 'video' && videoUrl ? (
-          <div className="h-full p-8">
-            <VideoPlayer 
-              src={videoUrl} 
-              className="w-full h-full"
-            />
+          <div className="h-full p-4 flex items-center justify-center">
+            <div className="w-full max-h-full" style={{ height: 'calc(100vh - 140px)' }}>
+              <VideoPlayer 
+                src={videoUrl} 
+                className="w-full h-full"
+              />
+            </div>
           </div>
         ) : (
           <div className="h-full">
