@@ -18,14 +18,18 @@ export default function Home() {
 
   if (selectedCourse) {
     return (
-      <CourseViewer 
-        course={selectedCourse} 
-        onBackToDashboard={handleBackToDashboard}
-      />
+      <div className="h-full">
+        <CourseViewer 
+          course={selectedCourse} 
+          onBackToDashboard={handleBackToDashboard}
+        />
+      </div>
     );
   }
 
   return (
-    <Dashboard onCourseSelect={handleCourseSelect} />
+    <div className="h-full">
+      <Dashboard onCourseSelect={handleCourseSelect} />
+    </div>
   );
 }

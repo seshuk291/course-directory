@@ -40,15 +40,15 @@ export default function ContentViewer({ content, title, loading, contentType = '
   }
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="bg-white border-b border-gray-200 px-8 py-4">
+    <div className="flex-1 flex flex-col h-full">
+      <div className="bg-white border-b border-gray-200 px-8 py-4 flex-shrink-0">
         <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
       </div>
       
       <div className="flex-1 bg-white overflow-hidden">
         {contentType === 'video' && videoUrl ? (
           <div className="h-full p-4 flex items-center justify-center">
-            <div className="w-full max-h-full" style={{ height: 'calc(100vh - 140px)' }}>
+            <div className="w-full max-h-full" style={{ height: 'calc(100vh - 200px)' }}>
               <VideoPlayer 
                 src={videoUrl} 
                 className="w-full h-full"
@@ -56,12 +56,13 @@ export default function ContentViewer({ content, title, loading, contentType = '
             </div>
           </div>
         ) : (
-          <div className="h-full">
+          <div className="h-full w-full">
             <iframe
               srcDoc={content || ''}
               className="w-full h-full border-0"
               sandbox="allow-scripts allow-same-origin"
               title={title}
+              style={{ minHeight: 'calc(100vh - 200px)' }}
             />
           </div>
         )}
